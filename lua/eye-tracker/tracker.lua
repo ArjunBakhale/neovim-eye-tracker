@@ -69,8 +69,18 @@ function M.get_info()
 end
 
 function M._detect_backend()
-  -- TODO: probe for Tobii SDK, EyeWare Beam, etc.
+  -- Probe for jeo-eyetracker sidecar
+  local script = M._find_plugin_root() .. "/scripts/eye_sidecar.py"
+  if vim.fn.filereadable(script) == 1 and vim.fn.executable("python3") == 1 then
+    return "jeo-eyetracker"
+  end
   return "mock"
+end
+
+function M._find_plugin_root()
+  local source = debug.getinfo(1, "S").source:sub(2) -- strip leading @
+  -- source is <root>/lua/eye-tracker/tracker.lua
+  return vim.fn.fnamemodify(source, ":h:h:h")
 end
 
 return M
