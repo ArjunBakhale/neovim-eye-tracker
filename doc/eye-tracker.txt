@@ -1,0 +1,185 @@
+*eye-tracker.txt*  Eye tracking cursor control for Neovim
+
+==============================================================================
+CONTENTS                                              *eye-tracker-contents*
+
+  1. Introduction ........................... |eye-tracker-introduction|
+  2. Requirements ........................... |eye-tracker-requirements|
+  3. Installation ........................... |eye-tracker-installation|
+  4. Configuration .......................... |eye-tracker-configuration|
+  5. Commands ............................... |eye-tracker-commands|
+  6. Lua API ................................ |eye-tracker-api|
+  7. Backend Interface ...................... |eye-tracker-backends|
+  8. Health Check ........................... |eye-tracker-health|
+
+==============================================================================
+1. INTRODUCTION                                   *eye-tracker-introduction*
+
+eye-tracker.nvim enables gaze-based cursor control in Neovim using external
+eye-tracking hardware. The plugin polls gaze data from a backend adapter,
+smooths it, maps screen coordinates to buffer positions, and moves the cursor.
+
+==============================================================================
+2. REQUIREMENTS                                   *eye-tracker-requirements*
+
+- Neovim >= 0.9
+- Supported eye-tracking hardware (Tobii, EyeWare Beam, etc.)
+- Corresponding backend module installed
+
+==============================================================================
+3. INSTALLATION                                   *eye-tracker-installation*
+
+lazy.nvim: >lua
+  {
+    "arjunbakhale/neovim-eye-tracker",
+    opts = {},
+  }
+<
+packer.nvim: >lua
+  use {
+    "arjunbakhale/neovim-eye-tracker",
+    config = function()
+      require("eye-tracker").setup()
+    end,
+  }
+<
+==============================================================================
+4. CONFIGURATION                                 *eye-tracker-configuration*
+
+Call `require("eye-tracker").setup(opts)` with any of these options:
+
+>lua
+  require("eye-tracker").setup({
+    polling_rate = 60,         -- Hz (1-240)
+    sensitivity = 1.0,         -- gaze sensitivity multiplier (0.1-10)
+    smoothing = {
+      method = "exponential",  -- "exponential" or "window"
+      factor = 0.3,            -- EMA factor (0-1, lower = smoother)
+      window_size = 5,         -- sliding window size
+    },
+    dead_zone = {
+      radius = 15,             -- pixel radius to ignore small movements
+    },
+    backend = "auto",          -- backend name or "auto"
+    keybindings = {
+      toggle = "<leader>et",   -- toggle tracking on/off
+      calibrate = "<leader>ec", -- open calibration UI
+    },
+    cursor = {
+      scope = "editor",        -- "editor" or "window"
+      edge_scroll = {
+        enabled = true,        -- scroll when gaze near window edge
+        margin = 20,           -- edge margin in cells
+        speed = 3,             -- scroll speed
+      },
+    },
+    auto_start = false,        -- start tracking on setup()
+  })
+<
+                                                *eye-tracker-config-polling_rate*
+polling_rate ~
+  Gaze polling frequency in Hz. Higher values give smoother tracking
+  but use more CPU. Range: 1-240. Default: 60.
+
+                                                *eye-tracker-config-sensitivity*
+sensitivity ~
+  Multiplier applied to gaze movement. Default: 1.0.
+
+                                                *eye-tracker-config-smoothing*
+smoothing ~
+  Noise reduction settings. `method` can be "exponential" (EMA) or
+  "window" (sliding average). Default: exponential with factor 0.3.
+
+                                                *eye-tracker-config-dead_zone*
+dead_zone ~
+  Minimum gaze movement (in pixels) before cursor updates. Prevents
+  jitter from micro-movements. Default radius: 15.
+
+                                                *eye-tracker-config-backend*
+backend ~
+  Name of the backend to load from `lua/eye-tracker/backends/`. Set to
+  "auto" for automatic detection. Default: "auto".
+
+==============================================================================
+5. COMMANDS                                         *eye-tracker-commands*
+
+                                                    *:EyeTrackerEnable*
+:EyeTrackerEnable       Start eye tracking. Loads the backend and begins
+                        the polling loop.
+
+                                                    *:EyeTrackerDisable*
+:EyeTrackerDisable      Stop eye tracking. Stops the polling loop and
+                        releases the backend.
+
+                                                    *:EyeTrackerToggle*
+:EyeTrackerToggle       Toggle eye tracking on/off.
+
+                                                    *:EyeTrackerCalibrate*
+:EyeTrackerCalibrate    Open the calibration UI. A fullscreen floating
+                        window displays 5 calibration points. Look at
+                        each [+] marker and press <Enter> to advance.
+                        Press <Esc> or q to cancel.
+
+                                                    *:EyeTrackerStatus*
+:EyeTrackerStatus       Display current tracking status including backend
+                        info, connection state, and polling rate.
+
+==============================================================================
+6. LUA API                                             *eye-tracker-api*
+
+require("eye-tracker").setup({opts})              *eye-tracker.setup()*
+  Initialize the plugin with the given options.
+
+require("eye-tracker").enable()                   *eye-tracker.enable()*
+  Start eye tracking.
+
+require("eye-tracker").disable()                  *eye-tracker.disable()*
+  Stop eye tracking.
+
+require("eye-tracker").toggle()                   *eye-tracker.toggle()*
+  Toggle eye tracking.
+
+require("eye-tracker").calibrate()                *eye-tracker.calibrate()*
+  Open the calibration UI.
+
+require("eye-tracker").status()                   *eye-tracker.status()*
+  Print the current status.
+
+==============================================================================
+7. BACKEND INTERFACE                               *eye-tracker-backends*
+
+Backends live at `lua/eye-tracker/backends/<name>.lua` and must return a
+table implementing:
+
+>lua
+  {
+    name = "my-backend",       -- string: backend identifier
+    start = function() end,    -- initialize the device/SDK
+    stop = function() end,     -- release resources
+    poll = function()          -- return GazeData or nil
+      return {
+        x = 0,                 -- screen x in pixels
+        y = 0,                 -- screen y in pixels
+        ts = 0,                -- timestamp in ms
+        valid = true,          -- whether sample is usable
+      }
+    end,
+    calibrate = function(cb)   -- run device calibration
+      cb({ success = true })
+    end,
+    is_connected = function()  -- return boolean
+      return true
+    end,
+  }
+<
+==============================================================================
+8. HEALTH CHECK                                     *eye-tracker-health*
+
+Run `:checkhealth eye-tracker` to verify:
+- Neovim version compatibility
+- Plugin setup status
+- Backend connection status
+- External SDK availability
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
