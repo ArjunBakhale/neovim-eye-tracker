@@ -89,6 +89,10 @@ def main():
         emit({"status": "error", "message": f"cannot open camera device: {device}"})
         sys.exit(1)
 
+    # Warm up camera: discard initial frames so auto-exposure settles
+    for _ in range(20):
+        cap.read()
+
     # Signal that we're ready
     emit({"status": "ready"})
 
