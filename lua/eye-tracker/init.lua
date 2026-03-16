@@ -22,6 +22,12 @@ function M.setup(opts)
     end, { desc = "Calibrate eye tracker" })
   end
 
+  -- Load saved calibration if available
+  local calibration = require("eye-tracker.calibration")
+  if calibration.load() then
+    vim.notify("[eye-tracker] loaded saved calibration", vim.log.levels.INFO)
+  end
+
   -- Auto-start if configured
   if cfg.auto_start then
     vim.defer_fn(function()

@@ -2,12 +2,12 @@
 """
 Eye tracker sidecar process for neovim-eye-tracker.
 
-Captures camera frames, runs pupil detection, and streams
-pupil coordinates as newline-delimited JSON on stdout.
+Captures camera frames, runs MediaPipe iris tracking, and streams
+gaze ratios as newline-delimited JSON on stdout.
 
 Protocol:
   stdout line 1: {"status": "ready"}
-  stdout lines:  {"cx": float, "cy": float, "w": float, "h": float, "valid": bool}
+  stdout lines:  {"rx": float, "ry": float, "valid": bool, "confidence": float}
   stdin:         "quit\n" to shut down
 """
 
@@ -20,34 +20,21 @@ import time
 
 
 def check_dependencies():
-    """Verify numpy < 2.0 and opencv are available."""
-    try:
-        import numpy as np
-    except ImportError:
-        print(
-            json.dumps({"status": "error", "message": "numpy not installed"}),
-            flush=True,
-        )
-        sys.exit(1)
-
-    np_version = tuple(int(x) for x in np.__version__.split(".")[:2])
-    if np_version >= (2, 0):
-        print(
-            json.dumps(
-                {
-                    "status": "error",
-                    "message": f"numpy {np.__version__} not supported, need < 2.0",
-                }
-            ),
-            flush=True,
-        )
-        sys.exit(1)
-
+    """Verify opencv and mediapipe are available."""
     try:
         import cv2  # noqa: F401
     except ImportError:
         print(
             json.dumps({"status": "error", "message": "opencv-python not installed"}),
+            flush=True,
+        )
+        sys.exit(1)
+
+    try:
+        import mediapipe  # noqa: F401
+    except ImportError:
+        print(
+            json.dumps({"status": "error", "message": "mediapipe not installed"}),
             flush=True,
         )
         sys.exit(1)
@@ -58,8 +45,8 @@ def emit(obj):
     print(json.dumps(obj), flush=True)
 
 
-def make_result(cx=0, cy=0, w=0, h=0, valid=False):
-    return {"cx": cx, "cy": cy, "w": w, "h": h, "valid": valid}
+def make_result(rx=0, ry=0, valid=False, confidence=0.0):
+    return {"rx": rx, "ry": ry, "valid": valid, "confidence": confidence}
 
 
 def main():
@@ -76,7 +63,7 @@ def main():
 
     import cv2
 
-    from pupil_detector import process_frame
+    from gaze_estimator import GazeEstimator
 
     # Parse device: integer index or string path
     try:
@@ -89,9 +76,14 @@ def main():
         emit({"status": "error", "message": f"cannot open camera device: {device}"})
         sys.exit(1)
 
-    # Warm up camera: discard initial frames so auto-exposure settles
-    for _ in range(20):
-        cap.read()
+    estimator = GazeEstimator()
+
+    # Warm up camera: discard initial frames so auto-exposure settles.
+    # Run one process_frame() call so the MediaPipe model loads before "ready".
+    for i in range(20):
+        ret, frame = cap.read()
+        if ret and i == 19:
+            estimator.process_frame(frame)
 
     # Signal that we're ready
     emit({"status": "ready"})
@@ -130,15 +122,16 @@ def main():
                 time.sleep(frame_interval)
                 continue
 
-            result = process_frame(frame)
+            result = estimator.process_frame(frame)
 
             if result is not None:
-                (cx, cy), (w, h), angle = result
-                if w > 0 and h > 0:
-                    emit(make_result(cx=round(cx, 1), cy=round(cy, 1),
-                                     w=round(w, 1), h=round(h, 1), valid=True))
-                else:
-                    emit(make_result())
+                rx, ry, confidence = result
+                emit(make_result(
+                    rx=round(rx, 4),
+                    ry=round(ry, 4),
+                    valid=True,
+                    confidence=round(confidence, 2),
+                ))
             else:
                 emit(make_result())
 
@@ -149,6 +142,7 @@ def main():
                 time.sleep(remaining)
 
     finally:
+        estimator.close()
         cap.release()
 
 

@@ -5,7 +5,7 @@ M.name = "jeo-eyetracker"
 local handle = nil
 local stdin_pipe = nil
 local stdout_pipe = nil
-local latest = { cx = 0, cy = 0, w = 0, h = 0, valid = false }
+local latest = { rx = 0, ry = 0, valid = false, confidence = 0 }
 local line_buffer = ""
 
 --- Find the plugin root directory by walking up from this file's location.
@@ -115,7 +115,7 @@ function M.start()
   end
 
   line_buffer = ""
-  latest = { cx = 0, cy = 0, w = 0, h = 0, valid = false }
+  latest = { rx = 0, ry = 0, valid = false, confidence = 0 }
 
   stdout_pipe:read_start(vim.schedule_wrap(on_stdout))
 end
@@ -155,32 +155,47 @@ function M.stop()
   end, 200)
 end
 
+function M.poll_raw()
+  if not latest.valid then
+    return nil
+  end
+  return { rx = latest.rx, ry = latest.ry, confidence = latest.confidence }
+end
+
 function M.poll()
   if not latest.valid then
     return { x = 0, y = 0, ts = vim.uv.now(), valid = false }
   end
 
-  -- Normalize pupil coords (640x480 frame) to screen pixels
-  local config = require("eye-tracker.config").get()
+  local calibration = require("eye-tracker.calibration")
+  local sx, sy = calibration.apply(latest.rx, latest.ry)
+
+  if sx then
+    return {
+      x = sx,
+      y = sy,
+      ts = vim.uv.now(),
+      valid = true,
+    }
+  end
+
+  -- Fallback: simple linear mapping if uncalibrated
   local cell_w = 8
   local cell_h = 16
   local screen_w = vim.o.columns * cell_w
   local screen_h = vim.o.lines * cell_h
 
   return {
-    x = (latest.cx / 640) * screen_w * config.sensitivity,
-    y = (latest.cy / 480) * screen_h * config.sensitivity,
+    x = latest.rx * screen_w,
+    y = latest.ry * screen_h,
     ts = vim.uv.now(),
     valid = true,
   }
 end
 
 function M.calibrate(callback)
-  -- The pupil detector doesn't need calibration per se,
-  -- but we pass through to the plugin's calibration UI
-  if callback then
-    callback({ success = true })
-  end
+  local calibration = require("eye-tracker.calibration")
+  calibration.open(callback)
 end
 
 function M.is_connected()

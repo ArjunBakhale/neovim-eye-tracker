@@ -51,18 +51,10 @@ function M._check_python()
   local numpy_out = vim.fn.system("python3 -c \"import numpy; print(numpy.__version__)\"")
   if vim.v.shell_error ~= 0 then
     vim.health.warn("numpy not installed", {
-      "pip install 'numpy<2.0'",
+      "pip install 'numpy>=1.24'",
     })
   else
-    local version = vim.trim(numpy_out)
-    local major = tonumber(version:match("^(%d+)"))
-    if major and major >= 2 then
-      vim.health.error("numpy " .. version .. " not supported (need < 2.0)", {
-        "pip install 'numpy<2.0'",
-      })
-    else
-      vim.health.ok("numpy " .. version)
-    end
+    vim.health.ok("numpy " .. vim.trim(numpy_out))
   end
 
   -- opencv
@@ -73,6 +65,16 @@ function M._check_python()
     })
   else
     vim.health.ok("opencv-python " .. vim.trim(cv_out))
+  end
+
+  -- mediapipe
+  local mp_out = vim.fn.system("python3 -c \"import mediapipe; print(mediapipe.__version__)\"")
+  if vim.v.shell_error ~= 0 then
+    vim.health.warn("mediapipe not installed", {
+      "pip install 'mediapipe>=0.10'",
+    })
+  else
+    vim.health.ok("mediapipe " .. vim.trim(mp_out))
   end
 end
 

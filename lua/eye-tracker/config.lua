@@ -24,6 +24,10 @@ local defaults = {
       speed = 3,
     },
   },
+  calibration = {
+    samples_per_point = 20,
+    sample_interval_ms = 25,
+  },
   auto_start = false,
 }
 

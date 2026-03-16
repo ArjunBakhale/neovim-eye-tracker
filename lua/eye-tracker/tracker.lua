@@ -77,6 +77,10 @@ function M._detect_backend()
   return "mock"
 end
 
+function M._get_backend()
+  return backend
+end
+
 function M._find_plugin_root()
   local source = debug.getinfo(1, "S").source:sub(2) -- strip leading @
   -- source is <root>/lua/eye-tracker/tracker.lua
